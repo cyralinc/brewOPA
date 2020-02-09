@@ -46,4 +46,5 @@ func main() {
 		fmt.Printf("failed to validate access: %v", err)
 		return
 	}
+	fmt.Printf("result (%T): %+v", result, result)
 }
