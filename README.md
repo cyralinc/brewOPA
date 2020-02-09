@@ -1,6 +1,8 @@
+![brewOPA logo](./assets/brewOPA-logo.png)
+
 # brewOPA
 
-BrewOPA is a data access control framework built on top of [Open Policy Agent (OPA)](www.openpolicyagent.org).
+brewOPA is a data access control framework built on top of [Open Policy Agent (OPA)](www.openpolicyagent.org).
 
 ## Usage
 
