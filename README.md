@@ -11,7 +11,7 @@ Instantiate the validator with the brewOPA rego module.
 ```
 validator, err := brewOPA.NewValidatorFromRego("../rego/brewOPA.rego")
 if err != nil {
-  fmt.Print("failed to create validator: %v", err)
+        fmt.Print("failed to create validator: %v", err)
 }
 ```
 
@@ -20,37 +20,37 @@ Configure the validator with one or more data access policies.
 ```
 data, err := ioutil.ReadFile("../rego/sample_data/policy.yaml")
 if err != nil {
-  fmt.Printf("failed to decode yaml: %v", err)
-  return
+        fmt.Printf("failed to decode yaml: %v", err)
+        return
 }
 
 policy, err := brewOPA.AccessPolicyFromYAML(data)
 if err != nil {
-  fmt.Print("failed to create access policy from YAML: %v", err)
-  return
+        fmt.Print("failed to create access policy from YAML: %v", err)
+        return
 }
 
 err = validator.AddPolicy("myPolicy", policy)
 if err != nil {
-  fmt.Printf("failed to add policy")
-  return
+        fmt.Printf("failed to add policy")
+        return
 }
 ```
 
 Create and validate accesses to data.
 
 ```
-access := brewOPA.NewAccess("invoices", "bob", brewOPA.AccessTypeRead,
-  brewOPA.TablesReferenced([]string{"finance.cards"}),
-  brewOPA.ColumnsReferenced(map[string][]string{
-    "finance.cards": []string{"card_number", "credit_limit"},
-  }),
+access := brewOPA.NewAccess("invoices", "bob", 10, brewOPA.AccessTypeRead,
+        brewOPA.TablesReferenced([]string{"finance.cards"}),
+        brewOPA.ColumnsReferenced(map[string][]string{
+                "finance.cards": []string{"card_number", "credit_limit"},
+        }),
 )
 
 result, err := validator.Validate(context.Background(), access)
 if err != nil {
-  fmt.Printf("failed to validate access: %v", err)
-  return
+        fmt.Printf("failed to validate access: %v", err)
+        return
 }
 ```
 
@@ -66,9 +66,9 @@ Create the access policy module
 
 ```
 curl localhost:8181/v1/policies/brewOPA \
-    -X PUT \
-    -H "Content-Type: text/plain" \
-    --data-binary @rego/brewOPA.rego
+  -X PUT \
+  -H "Content-Type: text/plain" \
+  --data-binary @rego/brewOPA.rego
 ```
 
 Deposit access policy to the namespace `policies/:policyID`
