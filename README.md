@@ -1,8 +1,8 @@
-![brewOPA logo](./assets/brewOPA-logo.png)
-
 # brewOPA
 
-brewOPA is a data access control framework built on top of [Open Policy Agent (OPA)](www.openpolicyagent.org).
+![brewOPA logo](./assets/brewOPA-logo.png)
+
+**brewOPA** is an extensible open-source framework that enables developers to easily brew data access control policies for [Open Policy Agent (OPA)](www.openpolicyagent.org) by writing them in the human-friendly YAML.
 
 ## Usage
 
@@ -11,7 +11,7 @@ Instantiate the validator with the brewOPA rego module.
 ```
 validator, err := brewOPA.NewValidatorFromRego("../rego/brewOPA.rego")
 if err != nil {
-  fmt.Print("failed to create validator: %v", err)
+        fmt.Print("failed to create validator: %v", err)
 }
 ```
 
@@ -20,37 +20,37 @@ Configure the validator with one or more data access policies.
 ```
 data, err := ioutil.ReadFile("../rego/sample_data/policy.yaml")
 if err != nil {
-  fmt.Printf("failed to decode yaml: %v", err)
-  return
+        fmt.Printf("failed to decode yaml: %v", err)
+        return
 }
 
 policy, err := brewOPA.AccessPolicyFromYAML(data)
 if err != nil {
-  fmt.Print("failed to create access policy from YAML: %v", err)
-  return
+        fmt.Print("failed to create access policy from YAML: %v", err)
+        return
 }
 
 err = validator.AddPolicy("myPolicy", policy)
 if err != nil {
-  fmt.Printf("failed to add policy")
-  return
+        fmt.Printf("failed to add policy")
+        return
 }
 ```
 
 Create and validate accesses to data.
 
 ```
-access := brewOPA.NewAccess("invoices", "bob", brewOPA.AccessTypeRead,
-  brewOPA.TablesReferenced([]string{"finance.cards"}),
-  brewOPA.ColumnsReferenced(map[string][]string{
-    "finance.cards": []string{"card_number", "credit_limit"},
-  }),
+access := brewOPA.NewAccess("invoices", "bob", 10, brewOPA.AccessTypeRead,
+        brewOPA.TablesReferenced([]string{"finance.cards"}),
+        brewOPA.ColumnsReferenced(map[string][]string{
+                "finance.cards": []string{"card_number", "credit_limit"},
+        }),
 )
 
 result, err := validator.Validate(context.Background(), access)
 if err != nil {
-  fmt.Printf("failed to validate access: %v", err)
-  return
+        fmt.Printf("failed to validate access: %v", err)
+        return
 }
 ```
 
@@ -76,68 +76,68 @@ Here, we deposit JSON (generated from the YAML using [yq](https://mikefarah.gitb
 
 ```
 curl localhost:8181/v1/data/policies/myPolicy \
-  -X PUT \
-  -H "Content-Type: text/plain" \
-  -d '{
-    "sensitiveAttrs": ["card_number", "credit_limit", "card_family"],
-    "locations": [
-      {
-        "repo": "invoices",
-        "schema": "finance",
-        "table": "cards"
-      }
-    ],
-    "rules": [
-      {
-        "deletes": {
-          "allow": true,
-          "rows": 1
-        },
-        "identities": ["bob"],
-        "reads": {
-          "allow": true,
-          "attributes": ["credit_limit", "card_family"],
-          "rows": 10
-        },
-        "updates": {
-          "allow": true,
-          "attributes": ["credit_limit"],
-          "rows": 1
+    -X PUT \
+    -H "Content-Type: text/plain" \
+    -d '{
+        "sensitiveAttrs": ["card_number", "credit_limit", "card_family"],
+        "locations": [
+            {
+                "repo": "invoices",
+                "schema": "finance",
+                "table": "cards"
+            }
+        ],
+        "rules": [
+            {
+                "deletes": {
+                    "allow": true,
+                    "rows": 1
+                },
+                "identities": ["bob"],
+                "reads": {
+                    "allow": true,
+                    "attributes": ["credit_limit", "card_family"],
+                    "rows": 10
+                },
+                "updates": {
+                    "allow": true,
+                    "attributes": ["credit_limit"],
+                    "rows": 1
+                }
+            }
+        ],
+        "defaultRule": {
+            "deletes": {
+                "allow": false
+            },
+            "reads": {
+                "allow": true,
+                "attributes": "any",
+                "rows": 1
+            },
+            "updates": {
+                "allow": false
+            }
         }
-      }
-    ],
-    "defaultRule": {
-      "deletes": {
-        "allow": false
-      },
-      "reads": {
-        "allow": true,
-        "attributes": "any",
-        "rows": 1
-      },
-      "updates": {
-        "allow": false
-      }
-    }
-  }'
+    }'
 ```
 
 Query the access policy module providing data access parameters as input
 
 ```
 curl localhost:8181/v1/data/dbAccess/main\?pretty\=true \
-  -X POST \
-  -H "Content-Type: application/json" \
-  -d '{
-    "input": {
-      "user": "bob",
-      "repo": "clinics",
-      "accessType": "SELECT",
-      "tablesReferenced": ["finance.cards"],
-      "columnsReferenced": {
-        "finance.cards": ["cust_id", "card_number", "credit_limit"]
-      },
-      "rowsAffected": 10
-    }
-  }'
+    -X POST \
+    -H "Content-Type: application/json" \
+    -d '{
+        "input": {
+            "user": "bob",
+            "repo": "clinics",
+            "accessType": "SELECT",
+            "tablesReferenced": ["finance.cards"],
+            "columnsReferenced": {
+                "finance.cards": ["cust_id", "card_number", "credit_limit"]
+            },
+            "rowsAffected": 10
+        }
+    }'
 ```
