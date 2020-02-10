@@ -1,4 +1,6 @@
-<img src="./assets/logo.png" style="margin-left: 0;margin-top:2rem; width: 40%;"></img>
+# brewOPA
+
+![brewOPA logo](./assets/logo.png)
 
 [brewopa.org](https://brewopa.org/)
 
