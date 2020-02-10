@@ -46,11 +46,11 @@ func NewValidator(regoModule []byte) (*Validator, error) {
 	return v, nil
 }
 
-func (v *Validator) Validate(ctx context.Context, a Access) (Result, error) {
+func (v *Validator) Validate(ctx context.Context, a Access) (*Result, error) {
 	parsedAccess, err := parseAccess(a)
 	if err != nil {
 		msg := fmt.Errorf("failed to parse access: %v", err)
-		return Result{}, msg
+		return nil, msg
 	}
 
 	regoResp, err := v.preparedQuery.Eval(
@@ -59,10 +59,10 @@ func (v *Validator) Validate(ctx context.Context, a Access) (Result, error) {
 	)
 	if err != nil {
 		msg := fmt.Errorf("failed to evaluate Rego with input: %v", err)
-		return Result{}, msg
+		return nil, msg
 	}
 
-	return parseRegoResp(regoResp)
+	return resultFromRego(regoResp)
 }
 
 func (v *Validator) AddPolicy(policyID string, policy AccessPolicy) error {
@@ -112,6 +112,10 @@ const (
 	AccessTypeDelete
 )
 
+func (a AccessType) String() string {
+	return []string{"reads", "updates", "deletes"}[a]
+}
+
 func NewAccess(repository, user string, accessType AccessType, opts ...AccessOption) Access {
 	a := Access{
 		Repository: repository,
@@ -158,103 +162,200 @@ func ColumnsUpdated(c map[string][]string) AccessOption {
 	}
 }
 
-// func parseAccess(a Access) (ast.Value,error) {
-// 	terms := [][2]*Term{
-// 		Item(NewTerm("Repo"),NewTerm())
-// 	}
-// 	ast.NewObject(...terms)
-// }
-
 func parseAccess(a Access) (ast.Value, error) {
 	b, err := json.Marshal(a)
 	if err != nil {
 		msg := fmt.Errorf("failed to encode access: %v", err)
 		return nil, msg
 	}
-	fmt.Printf("\naccess JSON (%T):\n%s\n\n", b, b)
 	return ast.ValueFromReader(bytes.NewReader(b))
 }
 
+// Result is the outcome of an access validation.
 type Result struct {
+	Pass   bool                  `json:"pass"`
+	Tables map[string]*TableRule `json:"tables"`
 }
 
-func parseRegoResp(resultSet rego.ResultSet) (Result, error) {
-	b, err := json.Marshal(resultSet)
+// TableRule details the contexted rules applied for a table during validation of an access.
+type TableRule struct {
+	PolicyDefined bool                      `json:"policyDefined"`
+	RulesApplied  map[string]*EvaluatedRule `json:"rulesApplied"`
+}
+
+// EvaluatedRule contains a contexted rule applied to a table and whether or not it was violated.
+type EvaluatedRule struct {
+	Violated      bool          `json:"violated"`
+	ContextedRule ContextedRule `json:"contextedRule"`
+}
+
+func resultFromRego(resultSet rego.ResultSet) (*Result, error) {
+	pass := true
+	tables := make(map[string]*TableRule)
+
+	unparsedResult, err := extractResultFromSet(resultSet)
 	if err != nil {
-		msg := fmt.Errorf("failed to encode access: %v", err)
-		return Result{}, msg
+		return nil, fmt.Errorf("failed to extract result from result set: %v", err)
 	}
-	fmt.Printf("\nregoResp JSON (%T):\n%s\n\n", b, b)
-	view("regoResp", resultSet)
-	view("regoResp[0]", resultSet)
-	view("regoResp[0].Expressions", resultSet[0].Expressions)
-	view("regoResp[0].Expressions[0]", resultSet[0].Expressions[0])
-	b, err = json.Marshal(resultSet[0].Expressions[0])
+
+	unparsedResultMap, err := asMap(unparsedResult)
 	if err != nil {
-		return Result{}, fmt.Errorf("failed to encode access: %v", err)
+		return nil, err
 	}
-	fmt.Printf("\resultSet[0].Expressions[0] JSON (%T):\n%s\n\n", b, b)
+	for table, unparsedTableRule := range unparsedResultMap {
+		tableRule, violation, err := parseTableRule(unparsedTableRule)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse table rule: %v", err)
+		}
+		if violation {
+			pass = false
+		}
+		tables[table] = tableRule
+	}
+
+	result := &Result{
+		Pass:   pass,
+		Tables: tables,
+	}
+
+	return result, nil
+}
+
+func extractResultFromSet(resultSet rego.ResultSet) (interface{}, error) {
 	if len(resultSet) == 0 {
-		return Result{}, fmt.Errorf("undefined rego query")
+		return nil, fmt.Errorf("undefined rego query")
 	}
 	regoResult := resultSet[0]
 	if len(regoResult.Expressions) == 0 {
-		return Result{}, fmt.Errorf("query returned no expressions")
+		return nil, fmt.Errorf("query returned no expressions")
 	}
-	unparsedResult := regoResult.Expressions[0].Value
-	fmt.Printf("\nunparsedResult (%T):\n%+v\n\n",
-		unparsedResult, unparsedResult)
-
-	return Result{}, nil
+	return regoResult.Expressions[0].Value, nil
 }
 
-func view(label string, v interface{}) {
-	fmt.Printf("\n%s (%T):\n%+v\n\n", label, v, v)
+func parseTableRule(unparsed interface{}) (*TableRule, bool, error) {
+	unparsedMap, err := asMap(unparsed)
+	if err != nil {
+		return nil, false, err
+	}
+
+	policyDefined, ok := unparsedMap["policyDefined"].(bool)
+	if !ok {
+		return nil, false, fmt.Errorf("expected policyDefined to be a bool, but got %T", unparsedMap["policyDefined"])
+	}
+
+	rulesApplied := make(map[string]*EvaluatedRule)
+	ruleMap, err := asMap(unparsedMap["rule"])
+	if err != nil {
+		return nil, false, err
+	}
+
+	var violation bool
+	for accessType, unparsedEvalRule := range ruleMap {
+		evalRule, err := parseEvalRule(unparsedEvalRule)
+		if err != nil {
+			return nil, false, fmt.Errorf("failed to parse eval rule: %v", err)
+		}
+		if evalRule.Violated {
+			violation = true
+		}
+		rulesApplied[accessType] = evalRule
+	}
+
+	tableRule := &TableRule{
+		PolicyDefined: policyDefined,
+		RulesApplied:  rulesApplied,
+	}
+	return tableRule, violation, nil
 }
 
-// // Read all existing policices and return in a map where each key is a policyID
-// // and the corresponding value is the policy data associated with that policyID.
-// func (v *Validator) getStoredPolicies(ctx context.Context) (map[string]interface{},error) {
-// 	kvs,err := q.storage.GetPrefix(ctx,cyralKeys.PolicyKeyPrefix)
-// 	if err != nil {
-// 		msg := fmt.Errorf("failed to get values with key prefix '%s': %v",
-// 			cyralKeys.PolicyKeyPrefix,err)
-// 		return nil,msg
-// 	}
+func parseEvalRule(unparsed interface{}) (*EvaluatedRule, error) {
+	unparsedMap, err := asMap(unparsed)
+	if err != nil {
+		return nil, err
+	}
+	violation, ok := unparsedMap["violation"].(bool)
+	if !ok {
+		return nil, fmt.Errorf("expected a bool, but got %T", unparsedMap["violation"])
+	}
+	contextedRule, err := parseContextedRule(unparsedMap["contextedRule"])
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse contexted rule: %v", err)
+	}
 
-// 	policies := make(map[string]interface{})
-// 	for _,kv := range kvs {
-// 		policyId := strings.TrimPrefix(kv.Key,cyralKeys.PolicyKeyPrefix)
+	evalRule := &EvaluatedRule{
+		Violated:      violation,
+		ContextedRule: contextedRule,
+	}
+	return evalRule, nil
+}
 
-// 		var policy map[string]interface{}
-// 		policyBytes := []byte(kv.Value)
-// 		err = json.Unmarshal(policyBytes,&policy)
-// 		if err != nil {
-// 			msg := fmt.Errorf("failed to decode policy '%s': %v",
-// 				kv.Value,err)
-// 			return nil,msg
-// 		}
+func parseContextedRule(unparsed interface{}) (ContextedRule, error) {
+	unparsedMap, err := asMap(unparsed)
+	if err != nil {
+		return ContextedRule{}, err
+	}
 
-// 		policies[policyId] = policy
-// 	}
+	untypedAllow, ok := unparsedMap["allow"]
+	if !ok {
+		return ContextedRule{}, fmt.Errorf("field 'allow' not found")
+	}
+	allow, ok := untypedAllow.(bool)
+	if !ok {
+		return ContextedRule{}, fmt.Errorf("expected a bool, but got %T", untypedAllow)
+	}
 
-// 	policyData := map[string]interface{}{
-// 		"policies": policies,
-// 	}
+	view(unparsedMap, "unparsedMap")
+	untypedRows, ok := unparsedMap["rows"]
+	if !ok {
+		return ContextedRule{}, fmt.Errorf("field 'rows' not found")
+	}
+	rows, err := untypedRows.(json.Number).Int64()
+	if err != nil {
+		return ContextedRule{}, fmt.Errorf("expected an int64, but got %T", untypedRows)
+	}
 
-// 	return policyData,nil
-// }
+	untypedAttrs, ok := unparsedMap["attributes"]
+	if !ok {
+		return ContextedRule{}, fmt.Errorf("field 'attributes' not found")
+	}
+	attrs, err := asStringSlice(untypedAttrs)
+	if err != nil {
+		return ContextedRule{}, fmt.Errorf("failed to build []string from []interface{}")
+	}
 
-// type Result map[string]TableResult
+	c := ContextedRule{
+		Allow:      allow,
+		Rows:       rows,
+		Attributes: attrs,
+	}
+	return c, nil
+}
 
-// type TableResult struct {
-// 	PolicyDefined bool      `json:"policyDefined"`
-// 	Rule          TableRule `json:"rule"`
-// }
+func asStringSlice(u interface{}) ([]string, error) {
+	slice, ok := u.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("not a slice")
+	}
+	ret := make([]string, len(slice))
+	for i, elem := range slice {
+		s, ok := elem.(string)
+		if !ok {
+			return nil, fmt.Errorf("expected string, but got %T", elem)
+		}
+		ret[i] = s
+	}
+	return ret, nil
+}
 
-// type TableRule map[string]*EvaluatedRule
+func asMap(i interface{}) (map[string]interface{}, error) {
+	m, ok := i.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("expected map[string]interface{}, but got %T", i)
+	}
+	return m, nil
+}
 
-// type EvaluatedRule struct {
-// 	ContextedRule policyClient.ContextedRule `json:"contextedRule"`
-// 	Violation     bool                       `json:"violation"`
-// }
+func view(i interface{}, label string) {
+	b, _ := json.Marshal(i)
+	fmt.Printf("\n%s: %s\n", label, b)
+}
