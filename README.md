@@ -1,5 +1,3 @@
-# brewOPA
-
 ![brewOPA logo](./assets/logo.png)
 
 [brewopa.org](https://brewopa.org/)
