@@ -76,66 +76,68 @@ Here, we deposit JSON (generated from the YAML using [yq](https://mikefarah.gitb
 
 ```
 curl localhost:8181/v1/data/policies/myPolicy \
-    -X PUT \
-    -H "Content-Type: text/plain" \
-    -d '{
-  "sensitiveAttrs": ["card_number", "credit_limit", "card_family"],
-  "locations": [
-    {
-      "repo": "invoices",
-      "schema": "finance",
-      "table": "cards"
-    }
-  ],
-  "rules": [
-    {
+  -X PUT \
+  -H "Content-Type: text/plain" \
+  -d '{
+    "sensitiveAttrs": ["card_number", "credit_limit", "card_family"],
+    "locations": [
+      {
+        "repo": "invoices",
+        "schema": "finance",
+        "table": "cards"
+      }
+    ],
+    "rules": [
+      {
+        "deletes": {
+          "allow": true,
+          "rows": 1
+        },
+        "identities": ["bob"],
+        "reads": {
+          "allow": true,
+          "attributes": ["credit_limit", "card_family"],
+          "rows": 10
+        },
+        "updates": {
+          "allow": true,
+          "attributes": ["credit_limit"],
+          "rows": 1
+        }
+      }
+    ],
+    "defaultRule": {
       "deletes": {
-        "allow": true,
-        "rows": 1
+        "allow": false
       },
-      "identities": ["bob"],
       "reads": {
         "allow": true,
-        "attributes": ["credit_limit", "card_family"],
-        "rows": 10
+        "attributes": "any",
+        "rows": 1
       },
       "updates": {
-        "allow": true,
-        "attributes": ["credit_limit"],
-        "rows": 1
+        "allow": false
       }
     }
-  ],
-  "defaultRule": {
-    "deletes": {
-      "allow": false
-    },
-    "reads": {
-      "allow": true,
-      "attributes": "any",
-      "rows": 1
-    },
-    "updates": {
-      "allow": false
-    }
-  }
-}'
+  }'
 ```
 
 Query the access policy module providing data access parameters as input
 
 ```
-curl -H "Content-Type: application/json" -X POST \
-$OPA_SERVER/v1/data/dbAccess/main\?pretty\=true \
--d '{
+curl localhost:8181/v1/data/dbAccess/main\?pretty\=true \
+  -X POST \
+  -H "Content-Type: application/json" \
+  -d '{
     "input": {
-        "user": "bob",
-        "repo": "clinics",
-        "accessType": "SELECT",
-        "tablesReferenced": ["finance.cards"],
-        "columnsReferenced": {
-            "finance.cards": ["Cust_ID", "Card_Number", "Credit_Limit"]
-        }
+      "user": "bob",
+      "repo": "clinics",
+      "accessType": "SELECT",
+      "tablesReferenced": ["finance.cards"],
+      "columnsReferenced": {
+        "finance.cards": ["cust_id", "card_number", "credit_limit"]
+      },
+      "rowsAffected": 10
     }
-}'
+  }'
 ```
