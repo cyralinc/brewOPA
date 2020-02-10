@@ -2,6 +2,8 @@
 
 ![brewOPA logo](./assets/brewOPA-logo.png)
 
+[https://brewopa.org/](https://brewopa.org/)
+
 **brewOPA** is an extensible open-source framework that enables developers to easily brew data access control policies for [Open Policy Agent (OPA)](www.openpolicyagent.org) by writing them in the human-friendly YAML.
 
 ## Usage
