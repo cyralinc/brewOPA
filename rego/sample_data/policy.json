@@ -1,0 +1,42 @@
+{
+  "sensitiveAttrs": ["card_number", "credit_limit", "card_family"],
+  "locations": [
+    {
+      "repo": "invoices",
+      "schema": "finance",
+      "table": "cards"
+    }
+  ],
+  "rules": [
+    {
+      "deletes": {
+        "allow": true,
+        "rows": 1
+      },
+      "identities": ["bob"],
+      "reads": {
+        "allow": true,
+        "attributes": ["credit_limit", "card_family"],
+        "rows": 10
+      },
+      "updates": {
+        "allow": true,
+        "attributes": ["credit_limit"],
+        "rows": 1
+      }
+    }
+  ],
+  "defaultRule": {
+    "deletes": {
+      "allow": false
+    },
+    "reads": {
+      "allow": true,
+      "attributes": "any",
+      "rows": 1
+    },
+    "updates": {
+      "allow": false
+    }
+  }
+}
