@@ -36,7 +36,7 @@ func main() {
 	}
 
 	// this access reads from card_number, which is disallowed by the policy
-	badAccess := brewOPA.NewAccess("invoices", "bob", brewOPA.AccessTypeRead,
+	badAccess := brewOPA.NewAccess("invoices", "bob", 10, brewOPA.AccessTypeRead,
 		brewOPA.TablesReferenced([]string{"finance.cards"}),
 		brewOPA.ColumnsReferenced(map[string][]string{
 			"finance.cards": []string{"card_number", "credit_limit"},
@@ -78,7 +78,7 @@ func main() {
 	// }
 
 	// Let's try again with a good access (no longer reading "card_number")
-	goodAccess := brewOPA.NewAccess("invoices", "bob", brewOPA.AccessTypeRead,
+	goodAccess := brewOPA.NewAccess("invoices", "bob", 10, brewOPA.AccessTypeRead,
 		brewOPA.TablesReferenced([]string{"finance.cards"}),
 		brewOPA.ColumnsReferenced(map[string][]string{
 			"finance.cards": []string{"credit_limit"},

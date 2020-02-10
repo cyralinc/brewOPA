@@ -97,6 +97,7 @@ type Access struct {
 	Repository        string              `json:"repo"`
 	User              string              `json:"user"`
 	AccessType        AccessType          `json:"accessType"`
+	RowsAffected      int64               `json:"rowsAffected"`
 	TablesReferenced  []string            `json:"tablesReferenced,omitempty"`
 	TablesUpdated     []string            `json:"tablesUpdated,omitempty"`
 	TablesDeleted     []string            `json:"tablesDeleted,omitempty"`
@@ -116,11 +117,15 @@ func (a AccessType) String() string {
 	return []string{"reads", "updates", "deletes"}[a]
 }
 
-func NewAccess(repository, user string, accessType AccessType, opts ...AccessOption) Access {
+func NewAccess(repository, user string,
+	rowsAffected int64,
+	accessType AccessType,
+	opts ...AccessOption) Access {
 	a := Access{
-		Repository: repository,
-		User:       user,
-		AccessType: accessType,
+		Repository:   repository,
+		User:         user,
+		AccessType:   accessType,
+		RowsAffected: rowsAffected,
 	}
 
 	for _, opt := range opts {
@@ -304,7 +309,6 @@ func parseContextedRule(unparsed interface{}) (ContextedRule, error) {
 		return ContextedRule{}, fmt.Errorf("expected a bool, but got %T", untypedAllow)
 	}
 
-	view(unparsedMap, "unparsedMap")
 	untypedRows, ok := unparsedMap["rows"]
 	if !ok {
 		return ContextedRule{}, fmt.Errorf("field 'rows' not found")
@@ -353,9 +357,4 @@ func asMap(i interface{}) (map[string]interface{}, error) {
 		return nil, fmt.Errorf("expected map[string]interface{}, but got %T", i)
 	}
 	return m, nil
-}
-
-func view(i interface{}, label string) {
-	b, _ := json.Marshal(i)
-	fmt.Printf("\n%s: %s\n", label, b)
 }

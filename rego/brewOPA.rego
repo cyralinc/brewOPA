@@ -10,6 +10,7 @@ import input.tablesUpdated as input_tables_updated
 import input.tablesDeleted as input_tables_deleted
 import input.columnsReferenced as input_columns_referenced
 import input.columnsUpdated as input_columns_updated
+import input.rowsAffected as input_rows_affected
 
 # remove_obj_key removes a given key and corresponding value from a given object
 # and returns to stripped object
@@ -90,6 +91,10 @@ all_input_tables[table] {
     table := input_tables_updated[_]
 }
 
+single_table_access {
+    count(all_input_tables) == 1
+}
+
 match(input_val, pattern_val) {
     input_val == pattern_val
 }
@@ -136,6 +141,34 @@ attrs_updated_violation(table, rule) {
     not rule.updates.attributes
 }
 
+
+rows_read_violation(rule) {
+    single_table_access
+    input_rows_affected > rule.reads.rows 
+}
+rows_read_violation(rule) {
+    single_table_access
+    not rule.reads.rows
+}
+
+rows_updated_violation(rule) {
+    single_table_access
+    input_rows_affected > rule.updates.rows 
+}
+rows_updated_violation(rule) {
+    single_table_access
+    not rule.updates.rows
+}
+
+rows_deleted_violation(rule) {
+    single_table_access
+    input_rows_affected > rule.deletes.rows
+}
+rows_deleted_violation(rule) {
+    single_table_access
+    not rule.deletes.rows
+}
+
 # read_rule_violations returns a list of violations occurring for a read
 # access to a table based on constraints in the given rule. An empty array will
 # be returned if there no violations are found. The set of possible violations
@@ -143,32 +176,61 @@ attrs_updated_violation(table, rule) {
 read_rule_violations(table, rule) = ["readDisallowed"] {
     not rule.reads.allow
 }
+read_rule_violations(table, rule) = ["disallowedAttrsRead","excessiveRowsRead"] {
+    rule.reads.allow
+    attrs_read_violation(table, rule)
+    rows_read_violation(rule)
+}
 read_rule_violations(table, rule) = ["disallowedAttrsRead"] {
     rule.reads.allow
     attrs_read_violation(table, rule)
+    not rows_read_violation(rule)
+}
+read_rule_violations(table, rule) = ["excessiveRowsRead"] {
+    rule.reads.allow
+    not attrs_read_violation(table, rule)
+    rows_read_violation(rule)
 }
 read_rule_violations(table, rule) = [] {
     rule.reads.allow
     not attrs_read_violation(table, rule)
+    not rows_read_violation(rule)
 }
 
 update_rule_violations(table, rule) = ["updateDisallowed"] {
     not rule.updates.allow
 }
+update_rule_violations(table, rule) = ["disallowedAttrsUpdated", "excessiveRowsUpdated"] {
+    rule.updates.allow
+    attrs_updated_violation(table, rule)
+    rows_updated_violation(rule)
+}
 update_rule_violations(table, rule) = ["disallowedAttrsUpdated"] {
     rule.updates.allow
     attrs_updated_violation(table, rule)
+    not rows_updated_violation(rule)
+}
+update_rule_violations(table, rule) = ["excessiveRowsUpdated"] {
+    rule.updates.allow
+    not attrs_updated_violation(table, rule)
+    rows_updated_violation(rule)
 }
 update_rule_violations(table, rule) = [] {
     rule.updates.allow
     not attrs_updated_violation(table, rule)
+    not rows_updated_violation(rule)
 }
 
 delete_rule_violations(table, rule) = ["deleteDisallowed"] {
     not rule.deletes.allow
 }
+delete_rule_violations(table, rule) = ["excessiveRowsDeleted"] {
+    rule.deletes.allow
+    rows_deleted_violation(rule)
+}
 delete_rule_violations(table, rule) = [] {
     rule.deletes.allow
+    not rows_deleted_violation(rule)
 }
 
 rule_violations(access_type, rule, table) = read_rule_violations(table, rule) {
