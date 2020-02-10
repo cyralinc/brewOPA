@@ -6,44 +6,52 @@ brewOPA is a data access control framework built on top of [Open Policy Agent (O
 
 ## Usage
 
+Instantiate the validator with the brewOPA rego module.
+
 ```
-	validator, err := brewOPA.NewValidatorFromRego("../rego/brewOPA.rego")
-	if err != nil {
-		fmt.Print("failed to create validator: %v", err)
-	}
+validator, err := brewOPA.NewValidatorFromRego("../rego/brewOPA.rego")
+if err != nil {
+  fmt.Print("failed to create validator: %v", err)
+}
+```
 
-	data, err := ioutil.ReadFile("../rego/sample_data/policy.yaml")
-	if err != nil {
-		fmt.Printf("failed to decode yaml: %v", err)
-		return
-	}
+Configure the validator with one or more data access policies.
 
-	policy, err := brewOPA.AccessPolicyFromYAML(data)
-	if err != nil {
-		fmt.Print("failed to create access policy from YAML: %v", err)
-		return
-	}
+```
+data, err := ioutil.ReadFile("../rego/sample_data/policy.yaml")
+if err != nil {
+  fmt.Printf("failed to decode yaml: %v", err)
+  return
+}
 
-	err = validator.AddPolicy("myPolicy", policy)
-	if err != nil {
-		fmt.Printf("failed to add policy")
-		return
-	}
+policy, err := brewOPA.AccessPolicyFromYAML(data)
+if err != nil {
+  fmt.Print("failed to create access policy from YAML: %v", err)
+  return
+}
 
-	ctx := context.Background()
+err = validator.AddPolicy("myPolicy", policy)
+if err != nil {
+  fmt.Printf("failed to add policy")
+  return
+}
+```
 
-	access := brewOPA.NewAccess("invoices", "bob", brewOPA.AccessTypeRead,
-		brewOPA.TablesReferenced([]string{"finance.cards"}),
-		brewOPA.ColumnsReferenced(map[string][]string{
-			"finance.cards": []string{"card_number", "credit_limit"},
-		}),
-	)
+Create and validate accesses to data.
 
-	result, err := validator.Validate(ctx, access)
-	if err != nil {
-		fmt.Printf("failed to validate access: %v", err)
-		return
-	}
+```
+access := brewOPA.NewAccess("invoices", "bob", brewOPA.AccessTypeRead,
+  brewOPA.TablesReferenced([]string{"finance.cards"}),
+  brewOPA.ColumnsReferenced(map[string][]string{
+    "finance.cards": []string{"card_number", "credit_limit"},
+  }),
+)
+
+result, err := validator.Validate(context.Background(), access)
+if err != nil {
+  fmt.Printf("failed to validate access: %v", err)
+  return
+}
 ```
 
 ## Access control via OPA REST APIs
